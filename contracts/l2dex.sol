@@ -85,9 +85,16 @@ contract l2dex{
    function pushTx(address _channelOwner, uint32 _id, uint256 _sum, uint8 v,bytes32 r,bytes32 s) public{
        require(_id>channels[_channelOwner].nonce);
        //require(channels[_channelOwner].sum > 0);
-       require(_channelOwner == ecrecover(keccak256(_channelOwner,_id,_sum), v, r, s));
-       channels[_channelOwner].sum = _sum;
-       channels[_channelOwner].nonce = _id;
+       if (_channelOwner == ecrecover(keccak256(_channelOwner,_id,_sum), v, r, s)) {
+           require(channels[_channelOwner].sum >= _sum);
+                  channels[_channelOwner].sum = _sum;
+                  channels[_channelOwner].nonce = _id;
+       } else if (l2dex == ecrecover(keccak256(_channelOwner,_id,_sum), v, r, s)) {
+           require(channels[_channelOwner].sum <= _sum);
+                  channels[_channelOwner].sum = _sum;
+                 channels[_channelOwner].nonce = _id;
+       }
+
        
    }
 
