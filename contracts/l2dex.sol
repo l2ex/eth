@@ -22,6 +22,13 @@ contract l2dex{
         _;
     }
     /**
+   * @dev Throws if called by any account other than the l2dex.
+   */
+    modifier onlyL2dex(){
+        require(msg.sender == l2dex);
+        _;
+    }
+    /**
    * @dev Constructor, initial l2dex oracle address.
    */
     function l2dex(address _oracle){
@@ -73,10 +80,15 @@ contract l2dex{
        
    }
    /**
-   * @dev Push last tx by user or by l2dex
+   * @dev Push last tx 
    */
-   function pushTx() public{
+   function pushTx(address _channelOwner, uint32 _id, uint256 _sum, uint8 v,bytes32 r,bytes32 s) public{
+       require(_id>channels[_channelOwner].nonce);
+       //require(channels[_channelOwner].sum > 0);
+       require(_channelOwner == ecrecover(keccak256(_channelOwner,_id,_sum), v, r, s));
+       channels[_channelOwner].sum = _sum;
+       channels[_channelOwner].nonce = _id;
        
    }
-    
+
 }
