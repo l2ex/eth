@@ -52,7 +52,7 @@ contract l2dex{
         } 
         else{  //new
             channels[msg.sender].sum = msg.value;
-            channels[msg.sender].nonce = 0;
+            channels[msg.sender].nonce = 1;
         }
         emit chanelChange(msg.sender, channels[msg.sender].ttl, channels[msg.sender].sum );
         
@@ -93,6 +93,7 @@ contract l2dex{
            require(channels[_channelOwner].sum <= _sum);
                   channels[_channelOwner].sum = _sum;
                  channels[_channelOwner].nonce = _id;
+                 channels[_channelOwner].state = State.canWithdraw;
        }
 
        
