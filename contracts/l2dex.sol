@@ -17,7 +17,8 @@ contract l2dex {
   }
 
 
-  uint32 constant DEFAULT_TTL = 3 days;
+  uint32 constant TTL_MIN = 1 days;
+  uint32 constant TTL_DEFAULT = 3 days;
 
   address public owner;
   address public oracle;
@@ -77,7 +78,7 @@ contract l2dex {
    * @dev Deposits ether to a channel by user.
    */
   function deposit() public payable {
-    channels[msg.sender][address(0)].expiration = now.add(DEFAULT_TTL);
+    channels[msg.sender][address(0)].expiration = now.add(TTL_DEFAULT);
     channels[msg.sender][address(0)].amount = channels[msg.sender][address(0)].amount.add(msg.value);
     channels[msg.sender][address(0)].nonce += 1;
     channels[msg.sender][address(0)].state = State.CantWithdraw;
@@ -91,7 +92,7 @@ contract l2dex {
   function deposit(address token, uint256 amount) public {
     // Transfer ERC20 tokens from the sender to the contract and check result
     require(ERC20(token).transferFrom(msg.sender, this, amount));
-    channels[msg.sender][token].expiration = now.add(DEFAULT_TTL);
+    channels[msg.sender][token].expiration = now.add(TTL_DEFAULT);
     channels[msg.sender][token].amount = channels[msg.sender][token].amount.add(amount);
     channels[msg.sender][token].nonce += 1;
     channels[msg.sender][token].state = State.CantWithdraw;
@@ -143,6 +144,7 @@ contract l2dex {
    */
   function updateChannel(address channelOwner, address token, uint32 nonce, uint256 amount, uint8 v, bytes32 r, bytes32 s) public {
     require(channels[channelOwner][token].nonce > 0 && nonce == channels[channelOwner][token].nonce + 1);
+    require(now < channels[channelOwner][token].expiration); // TODO: Is this limitation correct?
     address recoveredOwner = ecrecover(keccak256(abi.encodePacked(channelOwner, nonce, amount)), v, r, s);
     if (recoveredOwner == channelOwner) {
       // Transaction from user who owns the channel
@@ -172,6 +174,7 @@ contract l2dex {
    * @dev Extends expiration of the channel by user.
    */
   function extendChannel(address token, uint256 ttl) public {
+    require(ttl >= TTL_MIN);
     require(channels[msg.sender][token].nonce > 0);
     uint256 expiration = now.add(ttl);
     require(channels[msg.sender][token].expiration <= expiration);
