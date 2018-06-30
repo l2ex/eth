@@ -28,9 +28,9 @@ contract l2dex {
 
 
   // Minimal TTL that can be used to extend existing channel
-  uint32 constant TTL_MIN = 1 days;
+  uint32 constant TTL_MIN = 1 minutes; // TODO: Short time only for tests
   // Initial TTL for new channels created just after the first deposit
-  uint32 constant TTL_DEFAULT = 3 days;
+  uint32 constant TTL_DEFAULT = 3 minutes; // TODO: Short time only for tests
 
   // Address of account which has all permissions to manage channels
   address public owner;
@@ -102,7 +102,7 @@ contract l2dex {
   function deposit() public payable {
     require(msg.value > 0);
     channels[msg.sender].expiration = now.add(TTL_DEFAULT);
-    channels[msg.sender].nonce += 1;
+    //channels[msg.sender].nonce += 1; // TODO: Looks like wrong movement
     channels[msg.sender].accounts[address(0)].amount = channels[msg.sender].accounts[address(0)].amount.add(msg.value);
     channels[msg.sender].accounts[address(0)].state = State.CantWithdraw;
     emit Deposit(msg.sender, address(0), msg.value);
@@ -119,7 +119,7 @@ contract l2dex {
     // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
     require(ERC20(token).transferFrom(msg.sender, this, amount));
     channels[msg.sender].expiration = now.add(TTL_DEFAULT);
-    channels[msg.sender].nonce += 1;
+    //channels[msg.sender].nonce += 1; // TODO: Looks like wrong movement
     channels[msg.sender].accounts[token].amount = channels[msg.sender].accounts[token].amount.add(amount);
     channels[msg.sender].accounts[token].state = State.CantWithdraw;
     emit Deposit(msg.sender, token, amount);
@@ -131,7 +131,7 @@ contract l2dex {
    * @dev Performs withdraw ether to user.
    */
   function withdraw() public canWithdraw(address(0)) {
-    channels[msg.sender].nonce += 1;
+    //channels[msg.sender].nonce += 1; // TODO: Looks like wrong movement
     uint256 amount = channels[msg.sender].accounts[address(0)].amount;
     channels[msg.sender].accounts[address(0)].amount = 0;
     msg.sender.transfer(amount);
@@ -142,7 +142,7 @@ contract l2dex {
    * @dev Performs withdraw ERC20 token to user.
    */
   function withdraw(address token) public canWithdraw(token) {
-    channels[msg.sender].nonce += 1;
+    //channels[msg.sender].nonce += 1; // TODO: Looks like wrong movement
     uint256 amount = channels[msg.sender].accounts[token].amount;
     channels[msg.sender].accounts[token].amount = 0;
     require(ERC20(token).transfer(msg.sender, amount));
@@ -160,7 +160,7 @@ contract l2dex {
    * @dev Updates channel with most recent amount by user or by contract owner.
    */
   function updateChannel(address channelOwner, uint32 nonce, address token, uint256 amount, uint8 v, bytes32 r, bytes32 s) public {
-    require(channels[channelOwner].nonce > 0 && nonce == channels[channelOwner].nonce + 1);
+    require(channels[channelOwner].expiration > 0 && nonce > channels[channelOwner].nonce);
     address recoveredOwner = ecrecover(keccak256(abi.encodePacked(channelOwner, nonce, amount)), v, r, s);
     if (recoveredOwner == channelOwner) {
       // Transaction from user who owns the channel

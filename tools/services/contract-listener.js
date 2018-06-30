@@ -44,7 +44,7 @@ const handler = {
     // amount - amount of withdrawn tokens in the most lower pierces as string
     //   (e.g. if some USDT has 6 decimals instead of 18 like ether '1000000' means 1 USDT)
     // tx - hash of transaction in Ethereum during which event is happened
-    onDepositToken: function(channelOwner, token, amount, tx) {
+    onWithdrawToken: function(channelOwner, token, amount, tx) {
         // WE ASSUME THAT ONLY TOKEN SUPPORTED NOW IS USDT SO ASSUME IT ALWAYS HAS 6 DECIMALS
         // CHECK TOKEN ADDRESS IN REAL IMPLEMENTATION AND CONVERT AMOUNT CORRECTLY
         const a = Web3.utils.fromWei(amount, 'mwei')
@@ -74,16 +74,17 @@ const handler = {
 const MAX_BLOCKS_TO_SCAN = 1
 const WAITING_NEW_BLOCK_MS = 1000
 
-var lastScannerBlock = 0
+var nextBlockToScan = 0
 
 function scanEventsRecursive(fromBlock, handler) {
     return web3.eth.getBlockNumber().then(currentBlock => {
-        if (currentBlock > lastScannerBlock) {
+        if (currentBlock >= nextBlockToScan) {
             const toBlock = Math.min(fromBlock + MAX_BLOCKS_TO_SCAN, currentBlock)
             //console.log(`Scanning blocks from ${fromBlock} to ${toBlock}...`)
             return contract.getPastEvents('allEvents', { fromBlock: fromBlock, toBlock: toBlock }).then(events => {
-                lastScannerBlock = toBlock // TODO ?
+                nextBlockToScan = toBlock + 1
                 events.forEach(e => {
+                    console.log(e.returnValues.amount)
                     if (e.event === 'Deposit') {
                         if (Web3.utils.toBN(e.returnValues.token) == 0) {
                             handler.onDepositEther(
@@ -132,19 +133,19 @@ function scanEventsRecursive(fromBlock, handler) {
                         )
                     }
                 })
-                return scanEventsRecursive(lastScannerBlock, handler)
+                return scanEventsRecursive(nextBlockToScan, handler)
             })
         } else {
             //console.log(`Waiting for new blocks...`)
             return setTimeout(() => {
-                return scanEventsRecursive(lastScannerBlock, handler)
+                return scanEventsRecursive(nextBlockToScan, handler)
             }, WAITING_NEW_BLOCK_MS)
         }
     })
 }
 
 async function start() {
-    await scanEventsRecursive(lastScannerBlock, handler)
+    await scanEventsRecursive(nextBlockToScan, handler)
 }
 
 start()

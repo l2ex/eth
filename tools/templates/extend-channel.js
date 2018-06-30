@@ -7,15 +7,15 @@ const config = require('../config.js')
 const web3 = new Web3(config.network.url)
 
 const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2dex.abi').toString())
+const contractAddress = config.contract.address
 const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')
 
-// contractAddress - address of contract which should be extended
 // address - address of channel owner
 // privateKey - private key of `address`
 // ttl - amount of seconds while contract should be 'live' since now moment
-module.exports = function(contractAddress, address, privateKey, ttl) {
-    const contract = web3.eth.Contract(contractAbi, contractAddress)
+module.exports = function(address, privateKey, ttl) {
+    const contract = new web3.eth.Contract(contractAbi, contractAddress)
     const bytecode = contract.methods.extendChannel(ttl).encodeABI()
     return web3.eth.getTransactionCount(address).then(nonce => {
         var tx = new ethTx({
