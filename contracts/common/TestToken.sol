@@ -14,6 +14,8 @@ import "./SafeMath.sol";
 contract TestToken is ERC20 {
   using SafeMath for uint256;
 
+  address public owner;
+
   mapping(address => uint256) _balances;
   mapping (address => mapping (address => uint256)) internal _allowed;
 
@@ -22,7 +24,11 @@ contract TestToken is ERC20 {
   uint8 public decimals;
 
 
+  event Mint(address indexed to, uint256 amount);
+
+
   constructor(string _name, string _symbol, uint8 _decimals) public {
+    owner = msg.sender;
     name = _name;
     symbol = _symbol;
     decimals = _decimals;
@@ -91,5 +97,20 @@ contract TestToken is ERC20 {
    */
   function allowance(address _owner, address _spender) public view returns (uint256) {
     return _allowed[_owner][_spender];
+  }
+
+  /**
+   * @dev Function to mint tokens
+   * @param _to The address that will receive the minted tokens.
+   * @param _amount The amount of tokens to mint.
+   * @return A boolean that indicates if the operation was successful.
+   */
+  function mint(address _to, uint256 _amount) public returns (bool) {
+    require(msg.sender == owner);
+    totalSupply = totalSupply.add(_amount);
+    _balances[_to] = _balances[_to].add(_amount);
+    emit Mint(_to, _amount);
+    emit Transfer(address(0), _to, _amount);
+    return true;
   }
 }

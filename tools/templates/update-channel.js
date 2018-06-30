@@ -12,7 +12,7 @@ const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')
 
 // contractAddress - address of contract which contains and manages channels
-// tokenAddress - address of token contract (deposit tokens)
+// tokenAddress - address of token contract
 // address - address of deposit sender
 // privateKey - private key of `address`
 // channelOwner - address of channel owner
@@ -21,7 +21,7 @@ const gasPrice = Web3.utils.toWei('10', 'gwei')
 // v, r, s - parts of prepared signature
 module.exports = function(contractAddress, tokenAddress, address, privateKey, channelOwner, channelNonce, amount, v, r, s) {
     const contract = web3.eth.Contract(contractAbi, contractAddress)
-    const bytecode = contract.methods.updateChannel(channelOwner, channelNonce, amount, v, r, s).encodeABI()
+    const bytecode = contract.methods.updateChannel(channelOwner, channelNonce, tokenAddress, amount, v, r, s).encodeABI()
     web3.eth.getTransactionCount(address).then(nonce => {
         var tx = new ethTx({
             nonce: Web3.utils.toHex(nonce),
