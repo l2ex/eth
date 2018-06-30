@@ -1,8 +1,10 @@
+const HDWalletProvider = require('truffle-hdwallet-provider')
+const wallets = require('./wallets.js')
+
 module.exports = {
     networks: {
         ganache: {
-            host: '127.0.0.1',
-            port: 7545,
+            provider: new HDWalletProvider(wallets.mnemonic, 'http://127.0.0.1:7545', wallets.migrationMaster.index),
             network_id: '*'
         }
     },
@@ -12,4 +14,4 @@ module.exports = {
             runs: 200
         }
     }
-};
+}

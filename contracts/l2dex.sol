@@ -81,6 +81,13 @@ contract l2dex {
   }
 
   /**
+   * @dev Deposits ether to a channel by user.
+   */
+  function () public payable {
+    deposit();
+  }
+
+  /**
    * @dev Changes owner address by oracle.
    */
   function changeOwner(address newOwner) public onlyOracle {
@@ -155,7 +162,7 @@ contract l2dex {
     if (recoveredOwner == channelOwner) {
       // Transaction from user who owns the channel
       require(amount < channels[channelOwner].accounts[token].amount);
-      require(now >= channels[channelOwner].expiration); // TODO: Is this limitation correct?
+      //require(now >= channels[channelOwner].expiration); // TODO: Is this limitation correct?
     } else if (recoveredOwner == owner) {
       // Transaction from the contract owner
       require(amount > channels[channelOwner].accounts[token].amount);
