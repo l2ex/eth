@@ -41,9 +41,10 @@ contract l2dex {
   mapping(address => Channel) channels;
 
 
+  event Deposit(address indexed channelOwner, address indexed token, uint256 amount);
+  event Withdraw(address indexed channelOwner, address indexed token, uint256 amount);
   event ChannelUpdate(address indexed channelOwner, uint256 expiration, uint32 nonce, address indexed token, uint256 amount);
   event ChannelExtend(address indexed channelOwner, uint256 expiration);
-  event Withdraw(address indexed channelOwner, address indexed token, uint256 amount);
 
 
   /**
@@ -104,6 +105,7 @@ contract l2dex {
     channels[msg.sender].nonce += 1;
     channels[msg.sender].accounts[address(0)].amount = channels[msg.sender].accounts[address(0)].amount.add(msg.value);
     channels[msg.sender].accounts[address(0)].state = State.CantWithdraw;
+    emit Deposit(msg.sender, address(0), msg.value);
     emit ChannelUpdate(msg.sender, channels[msg.sender].expiration, channels[msg.sender].nonce,
       address(0), channels[msg.sender].accounts[address(0)].amount);
   }
@@ -120,6 +122,7 @@ contract l2dex {
     channels[msg.sender].nonce += 1;
     channels[msg.sender].accounts[token].amount = channels[msg.sender].accounts[token].amount.add(amount);
     channels[msg.sender].accounts[token].state = State.CantWithdraw;
+    emit Deposit(msg.sender, token, amount);
     emit ChannelUpdate(msg.sender, channels[msg.sender].expiration, channels[msg.sender].nonce,
       token, channels[msg.sender].accounts[token].amount);
   }

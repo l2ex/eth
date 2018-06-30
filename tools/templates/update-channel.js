@@ -22,7 +22,7 @@ const gasPrice = Web3.utils.toWei('10', 'gwei')
 module.exports = function(contractAddress, tokenAddress, address, privateKey, channelOwner, channelNonce, amount, v, r, s) {
     const contract = web3.eth.Contract(contractAbi, contractAddress)
     const bytecode = contract.methods.updateChannel(channelOwner, channelNonce, tokenAddress, amount, v, r, s).encodeABI()
-    web3.eth.getTransactionCount(address).then(nonce => {
+    return web3.eth.getTransactionCount(address).then(nonce => {
         var tx = new ethTx({
             nonce: Web3.utils.toHex(nonce),
             gasPrice: Web3.utils.toHex(gasPrice),
@@ -33,7 +33,7 @@ module.exports = function(contractAddress, tokenAddress, address, privateKey, ch
         })
         tx.sign(privateKey)
         var txSerialized = tx.serialize()
-        web3.eth.sendSignedTransaction('0x' + txSerialized.toString('hex')).then(txHash => {
+        return web3.eth.sendSignedTransaction('0x' + txSerialized.toString('hex')).then(txHash => {
             console.log(`Channel is updated by ${address} with transaction ${txHash}`)
         }).catch(err => {
             console.log(`Unable to update channel by ${address}: ${err}`)

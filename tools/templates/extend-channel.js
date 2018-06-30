@@ -10,13 +10,13 @@ const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2dex.abi').toStri
 const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')
 
-// contractAddress - address of contract which receives deposit
-// address - address of deposit sender
+// contractAddress - address of contract which should be extended
+// address - address of channel owner
 // privateKey - private key of `address`
-// amount - amount of ether to deposit in weis (as string)
-module.exports = function(contractAddress, address, privateKey, amount) {
+// ttl - amount of seconds while contract should be 'live' since now moment
+module.exports = function(contractAddress, address, privateKey, ttl) {
     const contract = web3.eth.Contract(contractAbi, contractAddress)
-    const bytecode = contract.methods.deposit().encodeABI()
+    const bytecode = contract.methods.extendChannel(ttl).encodeABI()
     return web3.eth.getTransactionCount(address).then(nonce => {
         var tx = new ethTx({
             nonce: Web3.utils.toHex(nonce),
@@ -24,15 +24,14 @@ module.exports = function(contractAddress, address, privateKey, amount) {
             gasLimit: Web3.utils.toHex(gas),
             to: contractAddress,
             from: address,
-            value: Web3.utils.fromWei(amount, 'ether'),
             data: bytecode
         })
         tx.sign(privateKey)
         var txSerialized = tx.serialize()
         return web3.eth.sendSignedTransaction('0x' + txSerialized.toString('hex')).then(txHash => {
-            console.log(`Deposit is done from ${address} with transaction ${txHash}`)
+            console.log(`Channel is extended by ${address} with transaction ${txHash}`)
         }).catch(err => {
-            console.log(`Unable to deposit from ${address}: ${err}`)
+            console.log(`Unable to extend channel owned by ${address}: ${err}`)
         })
     })
 }
