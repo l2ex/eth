@@ -1,0 +1,26 @@
+{
+  "name": "l2dex",
+  "version": "0.0.1",
+  "description": "eth one-2-n payment channel contract",
+  "main": "truffle.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/l2dex/eth.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/l2dex/eth/issues"
+  },
+  "homepage": "https://github.com/l2dex/eth#readme",
+  "dependencies": {
+    "ethereumjs-tx": "^1.3.5",
+    "ethereumjs-util": "^5.2.0",
+    "secp256k1": "^3.5.0",
+    "solc": "^0.4.24",
+    "web3": "^1.0.0-beta.34"
+  }
+}
