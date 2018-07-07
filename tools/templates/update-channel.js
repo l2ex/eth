@@ -1,14 +1,15 @@
+/*jshint esversion: 6 */
+
 const fs = require('fs')
 const Web3 = require('web3')
 const ethTx = require('ethereumjs-tx')
 
 const config = require('../config.js')
 
-const web3 = new Web3(config.network.url)
+const web3 = new Web3(config.network.url) // like 'http://localhost:7545'
 
 const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2dex.abi').toString())
-const contractAddress = config.contract.address
-const tokenAbi = JSON.parse(fs.readFileSync('bin/contracts/common/TestToken.abi').toString())
+const contractAddress = config.contract.address // like '0x0FEFB262Ac12533Baba161B52CCd3c8531f317d2'
 const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')
 

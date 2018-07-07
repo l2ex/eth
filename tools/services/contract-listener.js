@@ -58,7 +58,7 @@ const handler = {
     // amount - current amount of currency in the channel
     // tx - hash of transaction in Ethereum during which event is happened
     onChannelUpdate: function(channelOwner, expiration, nonce, token, amount, tx) {
-        const ether = !token || token.length < 4;
+        const ether = !token;
         const a = Web3.utils.fromWei(amount, ether ? 'ether' : 'mwei')
         console.log(`Channel ${channelOwner} is updated and expires since ${expiration}. It's balance ${a} ${ether ? 'ETH' : 'USDT'} and it's nonce ${nonce}. Transaction ${tx}`)
     },
@@ -71,20 +71,19 @@ const handler = {
     }
 }
 
-const MAX_BLOCKS_TO_SCAN = 1
-const WAITING_NEW_BLOCK_MS = 1000
+const MAX_BLOCKS_TO_SCAN = 10
+const WAITING_NEW_BLOCK_MS = 100
 
 var nextBlockToScan = 0
 
 function scanEventsRecursive(fromBlock, handler) {
     return web3.eth.getBlockNumber().then(currentBlock => {
         if (currentBlock >= nextBlockToScan) {
-            const toBlock = Math.min(fromBlock + MAX_BLOCKS_TO_SCAN, currentBlock)
-            //console.log(`Scanning blocks from ${fromBlock} to ${toBlock}...`)
+            const toBlock = Math.min(fromBlock + MAX_BLOCKS_TO_SCAN - 1, currentBlock)
+            console.log(`Scanning blocks from ${fromBlock} to ${toBlock}...`)
             return contract.getPastEvents('allEvents', { fromBlock: fromBlock, toBlock: toBlock }).then(events => {
                 nextBlockToScan = toBlock + 1
                 events.forEach(e => {
-                    console.log(e.returnValues.amount)
                     if (e.event === 'Deposit') {
                         if (Web3.utils.toBN(e.returnValues.token) == 0) {
                             handler.onDepositEther(
@@ -116,12 +115,11 @@ function scanEventsRecursive(fromBlock, handler) {
                             )
                         }
                     } else if (e.event === 'ChannelUpdate') {
-                        const token = Web3.utils.toBN(e.returnValues.token) == 0 ? e.returnValues.token : null
                         handler.onChannelUpdate(
                             e.returnValues.channelOwner,
                             e.returnValues.expiration,
                             e.returnValues.nonce,
-                            token,
+                            Web3.utils.toBN(e.returnValues.token) > 0 ? e.returnValues.token : null,
                             e.returnValues.amount,
                             e.transactionHash
                         )
@@ -136,7 +134,7 @@ function scanEventsRecursive(fromBlock, handler) {
                 return scanEventsRecursive(nextBlockToScan, handler)
             })
         } else {
-            //console.log(`Waiting for new blocks...`)
+            console.log(`Waiting for new blocks...`)
             return setTimeout(() => {
                 return scanEventsRecursive(nextBlockToScan, handler)
             }, WAITING_NEW_BLOCK_MS)
@@ -144,8 +142,9 @@ function scanEventsRecursive(fromBlock, handler) {
     })
 }
 
-async function start() {
+async function start(startBlock) {
+    nextBlockToScan = startBlock
     await scanEventsRecursive(nextBlockToScan, handler)
 }
 
-start()
+start(0)
