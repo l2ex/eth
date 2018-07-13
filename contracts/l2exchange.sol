@@ -38,6 +38,13 @@ contract l2exchange {
   // Existing channels where key of map is address of account which owns a channel
   mapping(address => Channel) channels;
 
+  // Amount of ether (in weis) or ERC20 tokens stored on the contract
+  // Zero key [address(0)] is used to store ether balance instead of ERC20 token balance
+  mapping(address => uint256) balances;
+
+
+  event DepositInternal(address indexed token, uint256 amount, uint256 balance);
+  event WithdrawInternal(address indexed token, uint256 amount, uint256 balance);
 
   event Deposit(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
   event Withdraw(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
@@ -100,6 +107,27 @@ contract l2exchange {
   }
 
   /**
+   * @dev Deposits ether to the contract.
+   */
+  function depositInternal() public payable {
+    require(msg.value > 0);
+    balances[address(0)] = balances[address(0)].add(msg.value);
+    emit DepositInternal(address(0), msg.value, balances[address(0)]);
+  }
+
+  /**
+   * @dev Deposits ERC20 tokens to the contract.
+   */
+  function depositInternal(address token, uint256 amount) public {
+    require(amount > 0);
+    // Transfer ERC20 tokens from the sender to the contract and check result
+    // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
+    require(ERC20(token).transferFrom(msg.sender, this, amount));
+    balances[token] = balances[token].add(amount);
+    emit DepositInternal(token, amount, balances[token]);
+  }
+
+  /**
    * @dev Deposits ether to a channel by user.
    */
   function deposit() public payable {
@@ -135,15 +163,41 @@ contract l2exchange {
   }
 
   /**
+   * @dev Performs withdraw ether to the owner.
+   */
+  function withdrawInternal(uint256 amount) public onlyOwner {
+    if (amount == 0 || amount > balances[address(0)]) {
+      amount = balances[address(0)];
+    }
+    balances[address(0)] = balances[address(0)].sub(amount);
+    msg.sender.transfer(amount);
+    emit WithdrawInternal(address(0), amount, balances[address(0)]);
+  }
+
+  /**
+   * @dev Performs withdraw ERC20 token to the owner.
+   */
+  function withdrawInternal(address token, uint256 amount) public onlyOwner {
+    if (amount == 0 || amount > balances[token]) {
+      amount = balances[token];
+    }
+    balances[token] = balances[token].sub(amount);
+    require(ERC20(token).transfer(msg.sender, amount));
+    emit WithdrawInternal(token, amount, balances[token]);
+  }
+
+  /**
    * @dev Performs withdraw ether to user.
    */
-  function withdraw() public canWithdraw(address(0)) {
+  function withdraw(uint256 amount) public canWithdraw(address(0)) {
     // Before widthdraw it is necessary to apply current balance change (if necessary)
     applyBalanceChange(msg.sender, address(0));
     Channel storage channel = channels[msg.sender];
     Account storage account = channel.accounts[address(0)];
-    uint256 amount = account.balance;
-    account.balance = 0;
+    if (amount == 0 || amount > account.balance) {
+      amount = account.balance;
+    }
+    account.balance = account.balance.sub(amount);
     msg.sender.transfer(amount);
     emit Withdraw(msg.sender, address(0), amount, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, address(0), account.balance, account.change, account.nonce);
@@ -152,13 +206,15 @@ contract l2exchange {
   /**
    * @dev Performs withdraw ERC20 token to user.
    */
-  function withdraw(address token) public canWithdraw(token) {
+  function withdraw(address token, uint256 amount) public canWithdraw(token) {
     // Before widthdraw it is necessary to apply current balance change (if necessary)
     applyBalanceChange(msg.sender, token);
     Channel storage channel = channels[msg.sender];
     Account storage account = channel.accounts[token];
-    uint256 amount = account.balance;
-    account.balance = 0;
+    if (amount == 0 || amount > account.balance) {
+      amount = account.balance;
+    }
+    account.balance = account.balance.sub(amount);
     require(ERC20(token).transfer(msg.sender, amount));
     emit Withdraw(msg.sender, token, amount, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, token, account.balance, account.change, account.nonce);
@@ -199,7 +255,6 @@ contract l2exchange {
   /**
    * @dev Changes channel balance according to accumulated balance change.
    */
-   // TODO: Make this possible to call only with signed message from user?
   function applyBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public onlyOwner {
     Channel storage channel = channels[channelOwner];
     Account storage account = channel.accounts[token];
@@ -208,6 +263,7 @@ contract l2exchange {
     // Check that balance change apply was requested by channel owner and the same values to apply are requested
     address requester = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
     require(requester == channelOwner);
+    require(account.change == change);
     applyBalanceChange(channelOwner, token);
     account.nonce = nonce;
     emit ChannelBalanceChangeApply(msg.sender, token, account.balance, account.change, account.nonce);
@@ -229,9 +285,11 @@ contract l2exchange {
   function applyBalanceChange(address channelOwner, address token) private {
     Account storage account = channels[channelOwner].accounts[token];
     if (account.change > 0) {
+      balances[token] = balances[token].sub(uint256(account.change));
       account.balance = account.balance.add(uint256(account.change));
       account.change = 0;
     } else if (account.change < 0) {
+      balances[token] = balances[token].add(uint256(-account.change));
       account.balance = account.balance.sub(uint256(-account.change));
       account.change = 0;
     }
