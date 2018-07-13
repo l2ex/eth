@@ -180,7 +180,6 @@ contract l2exchange {
     require(channel.expiration > 0 && nonce > account.nonce);
     require(change >= 0 || account.balance >= uint256(-change));
     address transactionAuthor = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
-    // TODO: Can push NOT OWN transaction only (for user, exchange can do that [for now])
     if (transactionAuthor == channelOwner) {
       // Transaction from user who owns the channel
       // Only contract owner can push offchain transactions from channel owner if the channel not expired
