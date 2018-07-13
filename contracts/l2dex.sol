@@ -8,19 +8,19 @@ contract l2dex {
   using SafeMath for uint256;
 
   struct Account {
-    // Amount of ether (in weis) or ERC20 token stored on the channel
+    // Amount of ether (in weis) or ERC20 tokens stored on the channel
     uint256 balance;
-    // Amount of ether (in weis) or ERC20 token pending to move to/from (depends on sign of the value) the balance
+    // Amount of ether (in weis) or ERC20 tokens pending to move to/from (depends on sign of the value) the balance
     int256 change;
     // Index of the last transaction
-    uint32 nonce;
+    uint256 nonce;
   }
 
   struct Channel {
     // Expiration date (timestamp)
     uint256 expiration;
     // Accounts related with the channel where key of a map is ERC20 token address
-    // Zero key [address(0)] is used to store ether amount instead of ERC20 token amount
+    // Zero key [address(0)] is used to store ether balance instead of ERC20 token balance
     mapping(address => Account) accounts;
   }
 
@@ -39,9 +39,10 @@ contract l2dex {
   mapping(address => Channel) channels;
 
 
-  event Deposit(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance, int256 change);
-  event Withdraw(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance, int256 change);
-  event ChannelUpdate(address indexed channelOwner, uint256 expiration, address indexed token, uint256 balance, int256 change, uint32 nonce);
+  event Deposit(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
+  event Withdraw(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
+  event ChannelUpdate(address indexed channelOwner, uint256 expiration, address indexed token, uint256 balance, int256 change, uint256 nonce);
+  event ChannelBalanceChangeApply(address indexed channelOwner, address indexed token, uint256 balance, int256 change, uint256 nonce);
   event ChannelExtend(address indexed channelOwner, uint256 expiration);
 
 
@@ -65,8 +66,12 @@ contract l2dex {
    * @dev Throws if channel cannot be withdrawn.
    */
   modifier canWithdraw(address token) {
-    require(channels[msg.sender].accounts[token].balance > 0 || channels[msg.sender].accounts[token].change > 0);
-    require(channels[msg.sender].accounts[token].change == 0 || now >= channels[msg.sender].expiration);
+    Channel storage channel = channels[msg.sender];
+    Account storage account = channel.accounts[token];
+    // There should be something that can be withdrawn on the channel
+    require(account.balance > 0 || account.change > 0);
+    // The channel should be either prepared for withdraw by owner or expired
+    require(account.change == 0 || now >= channel.expiration);
     _;
   }
 
@@ -101,9 +106,12 @@ contract l2dex {
     require(msg.value > 0);
     Channel storage channel = channels[msg.sender];
     Account storage account = channel.accounts[address(0)];
-    channel.expiration = now.add(TTL_DEFAULT);
+    uint256 expiration = now.add(TTL_DEFAULT);
+    if (channel.expiration < expiration) {
+      channel.expiration = expiration;
+    }
     account.balance = account.balance.add(msg.value);
-    emit Deposit(msg.sender, address(0), msg.value, account.balance, account.change);
+    emit Deposit(msg.sender, address(0), msg.value, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, address(0), account.balance, account.change, account.nonce);
   }
 
@@ -117,9 +125,12 @@ contract l2dex {
     require(ERC20(token).transferFrom(msg.sender, this, amount));
     Channel storage channel = channels[msg.sender];
     Account storage account = channel.accounts[token];
-    channel.expiration = now.add(TTL_DEFAULT);
+    uint256 expiration = now.add(TTL_DEFAULT);
+    if (channel.expiration < expiration) {
+      channel.expiration = expiration;
+    }
     account.balance = account.balance.add(amount);
-    emit Deposit(msg.sender, token, amount, account.balance, account.change);
+    emit Deposit(msg.sender, token, amount, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, token, account.balance, account.change, account.nonce);
   }
 
@@ -127,52 +138,56 @@ contract l2dex {
    * @dev Performs withdraw ether to user.
    */
   function withdraw() public canWithdraw(address(0)) {
-    // Before widthdraw it is necessary to apply current balance change
+    // Before widthdraw it is necessary to apply current balance change (if necessary)
     applyBalanceChange(msg.sender, address(0));
-    Account storage account = channels[msg.sender].accounts[address(0)];
+    Channel storage channel = channels[msg.sender];
+    Account storage account = channel.accounts[address(0)];
     uint256 amount = account.balance;
     account.balance = 0;
     msg.sender.transfer(amount);
-    emit Withdraw(msg.sender, address(0), amount, account.balance, account.change);
+    emit Withdraw(msg.sender, address(0), amount, account.balance);
+    emit ChannelUpdate(msg.sender, channel.expiration, address(0), account.balance, account.change, account.nonce);
   }
 
   /**
    * @dev Performs withdraw ERC20 token to user.
    */
   function withdraw(address token) public canWithdraw(token) {
-    // Before widthdraw it is necessary to apply current balance change
+    // Before widthdraw it is necessary to apply current balance change (if necessary)
     applyBalanceChange(msg.sender, token);
-    Account storage account = channels[msg.sender].accounts[token];
+    Channel storage channel = channels[msg.sender];
+    Account storage account = channel.accounts[token];
     uint256 amount = account.balance;
     account.balance = 0;
     require(ERC20(token).transfer(msg.sender, amount));
-    emit Withdraw(msg.sender, token, amount, account.balance, account.change);
+    emit Withdraw(msg.sender, token, amount, account.balance);
+    emit ChannelUpdate(msg.sender, channel.expiration, token, account.balance, account.change, account.nonce);
   }
 
   /**
    * @dev Push offchain transaction with most recent balance change by user or by contract owner (for ether only).
    */
-  function pushOffchainBalanceChange(address channelOwner, int256 change, uint32 nonce, bytes32 r, bytes32 s, uint8 v) public {
-    pushOffchainBalanceChange(channelOwner, address(0), change, nonce, r, s, v);
+  function pushOffchainBalanceChange(address channelOwner, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public {
+    pushOffchainBalanceChange(channelOwner, address(0), change, nonce, v, r, s);
   }
 
   /**
    * @dev Push offchain transaction with most recent balance change by user or by contract owner.
    */
-  function pushOffchainBalanceChange(address channelOwner, address token, int256 change, uint32 nonce, bytes32 r, bytes32 s, uint8 v) public {
+  function pushOffchainBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public {
     Channel storage channel = channels[channelOwner];
     Account storage account = channel.accounts[token];
     require(channel.expiration > 0 && nonce > account.nonce);
-    require(isBalanceChangeCorrect(account.balance, change));
-    address recoveredOwner = ecrecover(keccak256(abi.encodePacked(channelOwner, nonce, change)), v, r, s);
-    if (recoveredOwner == channelOwner) {
+    require(change >= 0 || account.balance >= uint256(-change));
+    address transactionAuthor = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
+    // TODO: Can push NOT OWN transaction only (for user, exchange can do that [for now])
+    if (transactionAuthor == channelOwner) {
       // Transaction from user who owns the channel
-      require(change < account.change);
-      //require(now >= channel.expiration); // TODO: Is this limitation correct?
-    } else if (recoveredOwner == owner) {
+      // Only contract owner can push offchain transactions from channel owner if the channel not expired
+      require(now >= channel.expiration || msg.sender == owner);
+    } else if (transactionAuthor == owner) {
       // Transaction from the contract owner
-      require(change > account.change);
-      require(now < channel.expiration); // TODO: Is this limitation correct?
+      // No additional limitations for pushing such transactions
     } else {
       // Specified arguments are not valid
       revert();
@@ -186,13 +201,17 @@ contract l2dex {
    * @dev Changes channel balance according to accumulated balance change.
    */
    // TODO: Make this possible to call only with signed message from user?
-  function applyBalanceChange(address channelOwner, address token, uint32 nonce) public onlyOwner {
+  function applyBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public onlyOwner {
     Channel storage channel = channels[channelOwner];
     Account storage account = channel.accounts[token];
+    require(now < channel.expiration);
     require(account.change != 0 && nonce > account.nonce);
+    // Check that balance change apply was requested by channel owner and the same values to apply are requested
+    address requester = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
+    require(requester == channelOwner);
     applyBalanceChange(channelOwner, token);
     account.nonce = nonce;
-    emit ChannelUpdate(msg.sender, channel.expiration, token, account.balance, account.change, account.nonce);
+    emit ChannelBalanceChangeApply(msg.sender, token, account.balance, account.change, account.nonce);
   }
 
   /**
@@ -217,9 +236,5 @@ contract l2dex {
       account.balance = account.balance.sub(uint256(-account.change));
       account.change = 0;
     }
-  }
-
-  function isBalanceChangeCorrect(uint256 balance, int256 change) private pure returns (bool) {
-    return change >= 0 || balance >= uint256(-change);
   }
 }

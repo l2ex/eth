@@ -16,12 +16,12 @@ contract TestToken is ERC20 {
 
   address public owner;
 
-  mapping(address => uint256) _balances;
-  mapping (address => mapping (address => uint256)) internal _allowed;
-
   string public name;
   string public symbol;
   uint8 public decimals;
+
+  mapping(address => uint256) _balances;
+  mapping(address => mapping(address => uint256)) internal _allowed;
 
 
   event Mint(address indexed to, uint256 amount);
@@ -35,7 +35,7 @@ contract TestToken is ERC20 {
   }
 
   /**
-  * @dev Transfer token for a specified address
+  * @dev Transfer token for a specified address.
   * @param _to The address to transfer to.
   * @param _value The amount to be transferred.
   */
@@ -58,7 +58,7 @@ contract TestToken is ERC20 {
   }
 
   /**
-   * @dev Transfer tokens from one address to another
+   * @dev Transfer tokens from one address to another.
    * @param _from address The address which you want to send tokens from
    * @param _to address The address which you want to transfer to
    * @param _value uint256 the amount of tokens to be transferred
@@ -100,7 +100,7 @@ contract TestToken is ERC20 {
   }
 
   /**
-   * @dev Function to mint tokens
+   * @dev Function to mint tokens.
    * @param _to The address that will receive the minted tokens.
    * @param _amount The amount of tokens to mint.
    * @return A boolean that indicates if the operation was successful.
