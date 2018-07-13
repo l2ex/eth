@@ -1,5 +1,5 @@
 {
-  "name": "l2dex",
+  "name": "l2exchange",
   "version": "0.0.1",
   "description": "eth one-2-n payment channel contract",
   "main": "truffle.js",
