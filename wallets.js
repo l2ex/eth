@@ -3,8 +3,8 @@ module.exports = {
     mnemonic: 'future float sadness law aim shrug coral clutch endorse poet machine abandon',
     migrationMaster: {
         index: 0,
-        key: Buffer.from('34bdb56c31352532b67d25da32bf3c55daa0fc21ad731e064bb4073fa16abee6', 'hex'),
-        address: '0x33b96cEc586083c1e9ed2641a7025200A1B1b260'
+        key: Buffer.from('86ffe101eddaf624aef9ae5cda1b7aafb3bf570ca5a42c505944fc675f1f59dc', 'hex'),
+        address: '0xA555b9BebEBb4F84aa1aFc28d46a288E103fe488'
     },
     userAlice: {
         index: 1,
