@@ -6,7 +6,7 @@ const config = require('../config.js')
 
 const web3 = new Web3(config.network.url)
 
-const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2exchange.abi').toString())
+const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2dex.abi').toString())
 const contractAddress = config.contract.address
 const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')

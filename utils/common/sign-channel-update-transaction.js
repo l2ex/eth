@@ -6,7 +6,7 @@ const ethTx = require('ethereumjs-tx')
 
 const web3 = new Web3('http://localhost:7545')
 
-const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2exchange.abi').toString())
+const contractAbi = JSON.parse(fs.readFileSync('bin/contracts/l2dex.abi').toString())
 const contractAddress = '0x0FEFB262Ac12533Baba161B52CCd3c8531f317d2'
 const gas = 250000
 const gasPrice = Web3.utils.toWei('10', 'gwei')

@@ -7,7 +7,7 @@ module.exports = {
             provider: new HDWalletProvider(wallets.mnemonic, 'http://127.0.0.1:7545', wallets.migrationMaster.index),
             network_id: '*'
         },
-        l2exchange: {
+        l2dex: {
             host: 'localhost',
             port: 8545,
             network_id: '*',

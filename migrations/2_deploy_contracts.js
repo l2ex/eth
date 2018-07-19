@@ -1,7 +1,7 @@
 const fs = require('fs')
 const tokens = require('../tokens.js')
 const wallets = require('../wallets.js')
-const l2exchange = artifacts.require("./l2exchange.sol")
+const l2dex = artifacts.require("./l2dex.sol")
 const token = artifacts.require("./common/TestToken.sol")
 
 var addressL2exchange = null
@@ -13,7 +13,7 @@ var addressTokenTRX = null
 
 function saveDeployedAddresses() {
     const fileContent = `module.exports = {
-    l2exchange: '${addressL2exchange}',
+    l2dex: '${addressL2exchange}',
     tokens: {
         EOS: '${addressTokenEOS}',
         BNB: '${addressTokenBNB}',
@@ -27,8 +27,8 @@ function saveDeployedAddresses() {
 
 module.exports = function(deployer) {
     const oracle = wallets.userCharlie.address
-    return deployer.deploy(l2exchange, oracle).then(() => {
-        addressL2exchange = l2exchange.address
+    return deployer.deploy(l2dex, oracle).then(() => {
+        addressL2exchange = l2dex.address
         return deployer.deploy(token, tokens.EOS.name, tokens.EOS.symbol, tokens.EOS.decimals)
     }).then(() => {
         addressTokenEOS = token.address
