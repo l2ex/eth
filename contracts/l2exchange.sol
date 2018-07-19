@@ -14,6 +14,8 @@ contract l2exchange {
     int256 change;
     // Index of the last transaction
     uint256 nonce;
+    // Ability to withdraw by user
+    bool canWithdraw;
   }
 
   struct Channel {
@@ -26,9 +28,9 @@ contract l2exchange {
 
 
   // Minimal TTL that can be used to extend existing channel
-  uint32 constant TTL_MIN = 1 minutes; // TODO: Short time only for tests
+  uint32 constant TTL_MIN = 1 days;
   // Initial TTL for new channels created just after the first deposit
-  uint32 constant TTL_DEFAULT = 3 minutes; // TODO: Short time only for tests
+  uint32 constant TTL_DEFAULT = 1 weeks;
 
   // Address of account which has all permissions to manage channels
   address public owner;
@@ -78,7 +80,7 @@ contract l2exchange {
     // There should be something that can be withdrawn on the channel
     require(account.balance > 0 || account.change > 0);
     // The channel should be either prepared for withdraw by owner or expired
-    require(account.change == 0 || now >= channel.expiration);
+    require(account.canWithdraw || now >= channel.expiration);
     _;
   }
 
@@ -139,6 +141,7 @@ contract l2exchange {
       channel.expiration = expiration;
     }
     account.balance = account.balance.add(msg.value);
+    account.canWithdraw = false;
     emit Deposit(msg.sender, address(0), msg.value, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, address(0), account.balance, account.change, account.nonce);
   }
@@ -158,6 +161,7 @@ contract l2exchange {
       channel.expiration = expiration;
     }
     account.balance = account.balance.add(amount);
+    account.canWithdraw = false;
     emit Deposit(msg.sender, token, amount, account.balance);
     emit ChannelUpdate(msg.sender, channel.expiration, token, account.balance, account.change, account.nonce);
   }
@@ -235,20 +239,21 @@ contract l2exchange {
     Account storage account = channel.accounts[token];
     require(channel.expiration > 0 && nonce > account.nonce);
     require(change >= 0 || account.balance >= uint256(-change));
-    address transactionAuthor = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
-    if (transactionAuthor == channelOwner) {
+    address signer = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
+    if (signer == channelOwner) {
       // Transaction from user who owns the channel
-      // Only contract owner can push offchain transactions from channel owner if the channel not expired
+      // Only contract owner can push offchain transactions signed by channel owner if the channel not expired
       require(now >= channel.expiration || msg.sender == owner);
-    } else if (transactionAuthor == owner) {
+    } else if (signer == owner) {
       // Transaction from the contract owner
-      // No additional limitations for pushing such transactions
+      // Only channel owner can push offchain transactions signed by contract owner if the channel not expired
+      require(now >= channel.expiration || msg.sender == channelOwner);
     } else {
       // Specified arguments are not valid
       revert();
     }
-    account.nonce = nonce;
     account.change = change;
+    account.nonce = nonce;
     emit ChannelUpdate(channelOwner, channel.expiration, token, account.balance, account.change, account.nonce);
   }
 
@@ -258,12 +263,14 @@ contract l2exchange {
   function applyBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public onlyOwner {
     Channel storage channel = channels[channelOwner];
     Account storage account = channel.accounts[token];
+    require(channelOwner == msg.sender);
     require(now < channel.expiration);
-    require(account.change != 0 && nonce > account.nonce);
+    require(change != 0 && nonce > account.nonce);
     // Check that balance change apply was requested by channel owner and the same values to apply are requested
-    address requester = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
-    require(requester == channelOwner);
-    require(account.change == change);
+    address signer = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
+    require(signer == owner);
+    // Since contract owner sings the transaction it is possible that actual not pushed balance change is used
+    account.change = change;
     applyBalanceChange(channelOwner, token);
     account.nonce = nonce;
     emit ChannelBalanceChangeApply(msg.sender, token, account.balance, account.change, account.nonce);
@@ -288,10 +295,12 @@ contract l2exchange {
       balances[token] = balances[token].sub(uint256(account.change));
       account.balance = account.balance.add(uint256(account.change));
       account.change = 0;
+      account.canWithdraw = true;
     } else if (account.change < 0) {
       balances[token] = balances[token].add(uint256(-account.change));
       account.balance = account.balance.sub(uint256(-account.change));
       account.change = 0;
+      account.canWithdraw = true;
     }
   }
 }
