@@ -51,7 +51,7 @@ contract l2dex {
   event Deposit(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
   event Withdraw(address indexed channelOwner, address indexed token, uint256 amount, uint256 balance);
   event ChannelUpdate(address indexed channelOwner, uint256 expiration, address indexed token, uint256 balance, int256 change, uint256 nonce);
-  event ChannelBalanceChangeApply(address indexed channelOwner, address indexed token, uint256 balance, int256 change, uint256 nonce);
+  event ChannelBalanceChangeApply(address indexed channelOwner, address indexed token, int256 change, uint256 nonce);
   event ChannelExtend(address indexed channelOwner, uint256 expiration);
 
 
@@ -174,7 +174,7 @@ contract l2dex {
       amount = balances[address(0)];
     }
     balances[address(0)] = balances[address(0)].sub(amount);
-    msg.sender.transfer(amount);
+    owner.transfer(amount);
     emit WithdrawInternal(address(0), amount, balances[address(0)]);
   }
 
@@ -186,7 +186,7 @@ contract l2dex {
       amount = balances[token];
     }
     balances[token] = balances[token].sub(amount);
-    require(ERC20(token).transfer(msg.sender, amount));
+    require(ERC20(token).transfer(owner, amount));
     emit WithdrawInternal(token, amount, balances[token]);
   }
 
@@ -227,19 +227,19 @@ contract l2dex {
   /**
    * @dev Push offchain transaction with most recent balance change by user or by contract owner (for ether only).
    */
-  function pushOffchainBalanceChange(address channelOwner, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public {
-    pushOffchainBalanceChange(channelOwner, address(0), change, nonce, v, r, s);
+  function pushOffchainBalanceChange(address channelOwner, int256 change, uint256 nonce, bool apply, uint8 v, bytes32 r, bytes32 s) public {
+    pushOffchainBalanceChange(channelOwner, address(0), change, nonce, apply, v, r, s);
   }
 
   /**
    * @dev Push offchain transaction with most recent balance change by user or by contract owner.
    */
-  function pushOffchainBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public {
+  function pushOffchainBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, bool apply, uint8 v, bytes32 r, bytes32 s) public {
     Channel storage channel = channels[channelOwner];
     Account storage account = channel.accounts[token];
     require(channel.expiration > 0 && nonce > account.nonce);
     require(change >= 0 || account.balance >= uint256(-change));
-    address signer = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
+    address signer = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce, apply)), v, r, s);
     if (signer == channelOwner) {
       // Transaction from user who owns the channel
       // Only contract owner can push offchain transactions signed by channel owner if the channel not expired
@@ -253,27 +253,12 @@ contract l2dex {
       revert();
     }
     account.change = change;
+    if (apply && signer == owner) {
+      applyBalanceChange(channelOwner, token);
+      emit ChannelBalanceChangeApply(channelOwner, token, change, account.nonce);
+    }
     account.nonce = nonce;
     emit ChannelUpdate(channelOwner, channel.expiration, token, account.balance, account.change, account.nonce);
-  }
-
-  /**
-   * @dev Changes channel balance according to accumulated balance change.
-   */
-  function applyBalanceChange(address channelOwner, address token, int256 change, uint256 nonce, uint8 v, bytes32 r, bytes32 s) public onlyOwner {
-    Channel storage channel = channels[channelOwner];
-    Account storage account = channel.accounts[token];
-    require(channelOwner == msg.sender);
-    require(now < channel.expiration);
-    require(change != 0 && nonce > account.nonce);
-    // Check that balance change apply was requested by channel owner and the same values to apply are requested
-    address signer = ecrecover(keccak256(abi.encodePacked(channelOwner, token, change, nonce)), v, r, s);
-    require(signer == owner);
-    // Since contract owner sings the transaction it is possible that actual not pushed balance change is used
-    account.change = change;
-    applyBalanceChange(channelOwner, token);
-    account.nonce = nonce;
-    emit ChannelBalanceChangeApply(msg.sender, token, account.balance, account.change, account.nonce);
   }
 
   /**
