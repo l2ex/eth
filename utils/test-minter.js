@@ -2,7 +2,7 @@ const fs = require('fs')
 const Web3 = require('web3')
 const ethTx = require('ethereumjs-tx')
 
-const web3 = new Web3('http://localhost:8545')
+const web3 = new Web3('http://52.15.129.165:12933')
 
 const tokenAbi = JSON.parse(fs.readFileSync('build/contracts/TestToken.json').toString()).abi   
 
@@ -35,6 +35,7 @@ function mint(tokenInfo, receiverAddress, amount) {
     const oneToken = Web3.utils.toBN('1'.padEnd(tokenInfo.decimals + 1, '0'))
     const value = amount * oneToken
     const token = new web3.eth.Contract(tokenAbi, tokenInfo.address)
+    console.log(value.toString())
     const bytecode = token.methods.mint(receiverAddress, value.toString()).encodeABI()
     return web3.eth.getTransactionCount(senderAddress).then(nonce => {
         if (nonce > lastNonce) {
@@ -84,4 +85,7 @@ function mintRandomRecursive() {
     }
 }
 
-mintRandomRecursive()
+//mintRandomRecursive()
+
+//mint(tokenInfos[0], '0xc3fe001ea0127685a3255ed7ac62f3a5c765eb04', 100)
+//mint(tokenInfos[0], '0xaa8e5ab63273f5a26a2483224259c85f5125ce82', 200)

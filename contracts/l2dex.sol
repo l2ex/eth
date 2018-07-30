@@ -274,6 +274,30 @@ contract l2dex {
     emit ChannelExtend(msg.sender, channel.expiration);
   }
 
+  // READ FUNCTIONS
+
+  function expirationOf(address channelOwner) public view returns (uint256) {
+    return channels[channelOwner].expiration;
+  }
+
+  function balanceOf(address channelOwner, address token) public view returns (uint256) {
+    return channels[channelOwner].accounts[token].balance;
+  }
+
+  function changeOf(address channelOwner, address token) public view returns (int256) {
+    return channels[channelOwner].accounts[token].change;
+  }
+
+  function nonceOf(address channelOwner, address token) public view returns (uint256) {
+    return channels[channelOwner].accounts[token].nonce;
+  }
+
+  function withdrawAbilityOf(address channelOwner, address token) public view returns (bool) {
+    return channels[channelOwner].accounts[token].canWithdraw;
+  }
+
+  // PRIVATE FUNCTIONS
+
   function applyBalanceChange(address channelOwner, address token) private {
     Account storage account = channels[channelOwner].accounts[token];
     if (account.change > 0) {
