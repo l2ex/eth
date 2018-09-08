@@ -11,7 +11,7 @@ import "./SafeMath.sol";
  * https://github.com/ethereum/EIPs/issues/20
  * Based on code by FirstBlood: https://github.com/Firstbloodio/token/blob/master/smart_contract/FirstBloodToken.sol
  */
-contract TestToken is ERC20 {
+contract Token is ERC20 {
   using SafeMath for uint256;
 
   address public owner;

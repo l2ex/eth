@@ -1,7 +1,7 @@
 const fs = require('fs')
 
-const l2dex = artifacts.require('./L2dex.sol')
-const token = artifacts.require('./common/TestToken.sol')
+const L2dex = artifacts.require('./L2dex.sol')
+const Token = artifacts.require('./common/Token.sol')
 
 const tokens = require('../tokens.js')
 const wallets = require('../wallets.js')
@@ -31,26 +31,26 @@ function saveDeployedAddresses() {
 
 module.exports = function(deployer) {
     const oracle = wallets.userCharlie.address
-    return deployer.deploy(l2dex, oracle).then(() => {
-        addressL2exchange = l2dex.address
-        return deployer.deploy(token, tokens.EOS.name, tokens.EOS.symbol, tokens.EOS.decimals)
+    return deployer.deploy(L2dex, oracle).then(() => {
+        addressL2exchange = L2dex.address
+        return deployer.deploy(Token, tokens.EOS.name, tokens.EOS.symbol, tokens.EOS.decimals)
     }).then(() => {
-        addressTokenEOS = token.address
-        return deployer.deploy(token, tokens.BNB.name, tokens.BNB.symbol, tokens.BNB.decimals)
+        addressTokenEOS = Token.address
+        return deployer.deploy(Token, tokens.BNB.name, tokens.BNB.symbol, tokens.BNB.decimals)
     }).then(() => {
-        addressTokenBNB = token.address
-        return deployer.deploy(token, tokens.ZIL.name, tokens.ZIL.symbol, tokens.ZIL.decimals)
+        addressTokenBNB = Token.address
+        return deployer.deploy(Token, tokens.ZIL.name, tokens.ZIL.symbol, tokens.ZIL.decimals)
     }).then(() => {
-        addressTokenZIL = token.address
-        return deployer.deploy(token, tokens.AION.name, tokens.AION.symbol, tokens.AION.decimals)
+        addressTokenZIL = Token.address
+        return deployer.deploy(Token, tokens.AION.name, tokens.AION.symbol, tokens.AION.decimals)
     }).then(() => {
-        addressTokenAION = token.address
-        return deployer.deploy(token, tokens.TRX.name, tokens.TRX.symbol, tokens.TRX.decimals)
+        addressTokenAION = Token.address
+        return deployer.deploy(Token, tokens.TRX.name, tokens.TRX.symbol, tokens.TRX.decimals)
     }).then(() => {
-        addressTokenTRX = token.address
-        return deployer.deploy(token, tokens.USDT.name, tokens.USDT.symbol, tokens.USDT.decimals)
+        addressTokenTRX = Token.address
+        return deployer.deploy(Token, tokens.USDT.name, tokens.USDT.symbol, tokens.USDT.decimals)
     }).then(() => {
-        addressTokenUSDT = token.address
+        addressTokenUSDT = Token.address
         saveDeployedAddresses()
     })
 }
