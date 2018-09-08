@@ -28,5 +28,11 @@ module.exports = {
         symbol: 'TRX',
         decimals: 6,
         price: '0.00007738' // in ETH
+    },
+    USDT: {
+        name: 'Tether',
+        symbol: 'USDT',
+        decimals: 6,
+        price: '0.00022' // in ETH
     }
 }

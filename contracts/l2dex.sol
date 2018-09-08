@@ -276,23 +276,23 @@ contract l2dex {
 
   // READ FUNCTIONS
 
-  function expirationOf(address channelOwner) public view returns (uint256) {
+  function getExpiration(address channelOwner) public view returns (uint256) {
     return channels[channelOwner].expiration;
   }
 
-  function balanceOf(address channelOwner, address token) public view returns (uint256) {
+  function getBalance(address channelOwner, address token) public view returns (uint256) {
     return channels[channelOwner].accounts[token].balance;
   }
 
-  function changeOf(address channelOwner, address token) public view returns (int256) {
+  function getChange(address channelOwner, address token) public view returns (int256) {
     return channels[channelOwner].accounts[token].change;
   }
 
-  function nonceOf(address channelOwner, address token) public view returns (uint256) {
+  function getNonce(address channelOwner, address token) public view returns (uint256) {
     return channels[channelOwner].accounts[token].nonce;
   }
 
-  function withdrawAbilityOf(address channelOwner, address token) public view returns (bool) {
+  function getWithdrawAbility(address channelOwner, address token) public view returns (bool) {
     return channels[channelOwner].accounts[token].canWithdraw;
   }
 

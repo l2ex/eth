@@ -1,13 +1,15 @@
 const HDWalletProvider = require('truffle-hdwallet-provider')
 const wallets = require('./wallets.js')
 
+const ganacheProvider = new HDWalletProvider(wallets.mnemonic, 'http://127.0.0.1:7545', wallets.migrationMaster.index)
+
 module.exports = {
     networks: {
         ganache: {
-            provider: new HDWalletProvider(wallets.mnemonic, 'http://127.0.0.1:7545', wallets.migrationMaster.index),
+            provider: ganacheProvider,
             network_id: '*'
         },
-        l2dex: {
+        local: {
             host: 'localhost',
             port: 8545,
             network_id: '*',

@@ -1,8 +1,10 @@
 const fs = require('fs')
+
+const l2dex = artifacts.require('./l2dex.sol')
+const token = artifacts.require('./common/TestToken.sol')
+
 const tokens = require('../tokens.js')
 const wallets = require('../wallets.js')
-const l2dex = artifacts.require("./l2dex.sol")
-const token = artifacts.require("./common/TestToken.sol")
 
 var addressL2exchange = null
 var addressTokenEOS = null
@@ -10,6 +12,7 @@ var addressTokenBNB = null
 var addressTokenZIL = null
 var addressTokenAION = null
 var addressTokenTRX = null
+var addressTokenUSDT = null
 
 function saveDeployedAddresses() {
     const fileContent = `module.exports = {
@@ -19,7 +22,8 @@ function saveDeployedAddresses() {
         BNB: '${addressTokenBNB}',
         ZIL: '${addressTokenZIL}',
         AION: '${addressTokenAION}',
-        TRX: '${addressTokenTRX}'
+        TRX: '${addressTokenTRX}',
+        USDN: '${addressTokenUSDT}'
     }
 }`
     fs.writeFileSync('deployed-addresses.js', fileContent)
@@ -44,6 +48,9 @@ module.exports = function(deployer) {
         return deployer.deploy(token, tokens.TRX.name, tokens.TRX.symbol, tokens.TRX.decimals)
     }).then(() => {
         addressTokenTRX = token.address
+        return deployer.deploy(token, tokens.USDT.name, tokens.USDT.symbol, tokens.USDT.decimals)
+    }).then(() => {
+        addressTokenUSDT = token.address
         saveDeployedAddresses()
     })
 }
