@@ -4,7 +4,7 @@ import './common/ERC20.sol';
 import './common/SafeMath.sol';
 
 
-contract l2dex {
+contract L2dex {
   using SafeMath for uint256;
 
   struct Account {
