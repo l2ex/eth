@@ -1,6 +1,6 @@
 const fs = require('fs')
 
-const l2dex = artifacts.require('./l2dex.sol')
+const l2dex = artifacts.require('./L2dex.sol')
 const token = artifacts.require('./common/TestToken.sol')
 
 const tokens = require('../tokens.js')
