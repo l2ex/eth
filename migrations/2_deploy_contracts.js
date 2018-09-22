@@ -1,7 +1,7 @@
 const fs = require('fs')
 
 const L2DexEthereum = artifacts.require('./L2DexEthereum.sol')
-const L2DexEthereum = artifacts.require('./L2DexQtum.sol')
+const L2DexQtum = artifacts.require('./L2DexQtum.sol')
 const ERC20Token = artifacts.require('./common/ERC20Token.sol')
 
 const tokens = require('../tokens.js')
