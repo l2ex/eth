@@ -1,7 +1,8 @@
 const fs = require('fs')
 
-const L2dex = artifacts.require('./L2dex.sol')
-const Token = artifacts.require('./common/Token.sol')
+const L2DexEthereum = artifacts.require('./L2DexEthereum.sol')
+const L2DexEthereum = artifacts.require('./L2DexQtum.sol')
+const ERC20Token = artifacts.require('./common/ERC20Token.sol')
 
 const tokens = require('../tokens.js')
 const wallets = require('../wallets.js')
@@ -31,26 +32,26 @@ function saveDeployedAddresses() {
 
 module.exports = function(deployer) {
     const oracle = wallets.userCharlie.address
-    return deployer.deploy(L2dex, oracle).then(() => {
-        addressL2exchange = L2dex.address
-        return deployer.deploy(Token, tokens.EOS.name, tokens.EOS.symbol, tokens.EOS.decimals)
+    return deployer.deploy(L2DexEthereum, oracle).then(() => {
+        addressL2exchange = L2DexEthereum.address
+        return deployer.deploy(ERC20Token, tokens.EOS.name, tokens.EOS.symbol, tokens.EOS.decimals)
     }).then(() => {
-        addressTokenEOS = Token.address
-        return deployer.deploy(Token, tokens.BNB.name, tokens.BNB.symbol, tokens.BNB.decimals)
+        addressTokenEOS = ERC20Token.address
+        return deployer.deploy(ERC20Token, tokens.BNB.name, tokens.BNB.symbol, tokens.BNB.decimals)
     }).then(() => {
-        addressTokenBNB = Token.address
-        return deployer.deploy(Token, tokens.ZIL.name, tokens.ZIL.symbol, tokens.ZIL.decimals)
+        addressTokenBNB = ERC20Token.address
+        return deployer.deploy(ERC20Token, tokens.ZIL.name, tokens.ZIL.symbol, tokens.ZIL.decimals)
     }).then(() => {
-        addressTokenZIL = Token.address
-        return deployer.deploy(Token, tokens.AION.name, tokens.AION.symbol, tokens.AION.decimals)
+        addressTokenZIL = ERC20Token.address
+        return deployer.deploy(ERC20Token, tokens.AION.name, tokens.AION.symbol, tokens.AION.decimals)
     }).then(() => {
-        addressTokenAION = Token.address
-        return deployer.deploy(Token, tokens.TRX.name, tokens.TRX.symbol, tokens.TRX.decimals)
+        addressTokenAION = ERC20Token.address
+        return deployer.deploy(ERC20Token, tokens.TRX.name, tokens.TRX.symbol, tokens.TRX.decimals)
     }).then(() => {
-        addressTokenTRX = Token.address
-        return deployer.deploy(Token, tokens.USDT.name, tokens.USDT.symbol, tokens.USDT.decimals)
+        addressTokenTRX = ERC20Token.address
+        return deployer.deploy(ERC20Token, tokens.USDT.name, tokens.USDT.symbol, tokens.USDT.decimals)
     }).then(() => {
-        addressTokenUSDT = Token.address
+        addressTokenUSDT = ERC20Token.address
         saveDeployedAddresses()
     })
 }
