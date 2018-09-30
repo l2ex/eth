@@ -122,7 +122,7 @@ async function deployTestTokens() {
 
 async function deployL2() {
 
-    const l2Ethereum = await deployL2Ethereum()
+    //const l2Ethereum = await deployL2Ethereum()
 
     const ecrpk = await deployECRecoverPublicKey()
     const l2Qtum = await deployL2Qtum(ecrpk.address)
@@ -154,7 +154,7 @@ async function prepareQtum() {
 }
 
 async function prepare() {
-    //await prepareEthereum()
+    await prepareEthereum()
     await prepareQtum()
 }
 

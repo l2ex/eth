@@ -1,1 +1,1 @@
-eth one-2-n payment channel contract
+Ethereum and QTUM one-2-n payment channel contracts.
