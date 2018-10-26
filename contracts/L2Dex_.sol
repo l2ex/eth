@@ -42,7 +42,7 @@ contract L2Dex {
     // Minimal TTL that can be used to extend existing channel
     uint256 constant public TTL_MIN = 1 days;
     // Initial TTL for new channels created just after the first deposit
-    uint256 constant public TTL_DEFAULT = 7 days;
+    uint256 constant public TTL_DEFAULT = 20 days;
 
     // Address of account which has all permissions to manage channels
     address public owner;

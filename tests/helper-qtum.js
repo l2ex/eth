@@ -1,16 +1,14 @@
 const fs = require('fs')
 const Web3 = require('web3')
 const { QtumRPC } = require('qtumjs')
-const QtumCore = require('qtumcore-lib')
 const bs58check = require('bs58check')
 
 
 class HelperQtum {
 
-    constructor(connection, testnet) {
+    constructor(connection) {
         this.web3 = new Web3()
         this.rpc = new QtumRPC(connection)
-        this.network = testnet ? QtumCore.Networks.testnet : QtumCore.Networks.mainnet
         this.contracts = {
             ecrpk: {
                 bin: fs.readFileSync('./ECRecoverPublicKey.bin').toString()
