@@ -174,12 +174,12 @@ contract L2Dex {
     function deposit() public notExpired payable {
         require(msg.value > 0);
         Channel storage channel = channels[msg.sender];
-        Account storage account = channel.accounts[address(0)];
         if (channel.expiration == 0) {
             channel.expiration = now.add(TTL_DEFAULT);
             channel.contractOwner = owner;
             emit ChannelExtend(msg.sender, channel.expiration);
         }
+        Account storage account = channel.accounts[address(0)];
         account.balance = account.balance.add(msg.value);
         emit Deposit(msg.sender, address(0), msg.value, account.balance);
         emit ChannelUpdate(msg.sender, address(0), account.balance, account.change, account.withdrawable, account.nonce);
@@ -192,12 +192,12 @@ contract L2Dex {
         // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
         require(ERC20(token).transferFrom(msg.sender, this, amount));
         Channel storage channel = channels[msg.sender];
-        Account storage account = channel.accounts[token];
         if (channel.expiration == 0) {
             channel.expiration = now.add(TTL_DEFAULT);
             channel.contractOwner = owner;
             emit ChannelExtend(msg.sender, channel.expiration);
         }
+        Account storage account = channel.accounts[token];
         account.balance = account.balance.add(amount);
         emit Deposit(msg.sender, token, amount, account.balance);
         emit ChannelUpdate(msg.sender, token, account.balance, account.change, account.withdrawable, account.nonce);
