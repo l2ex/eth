@@ -36,27 +36,6 @@ contract L2Dex {
     }
 
     ///////////////////////////////////////////////////
-    // CONTRACT MEMBERS
-    ///////////////////////////////////////////////////
-
-    // Minimal TTL that can be used to extend existing channel
-    uint256 constant public TTL_MIN = 1 days;
-    // Initial TTL for new channels created just after the first deposit
-    uint256 constant public TTL_DEFAULT = 20 days;
-
-    // Address of account which has all permissions to manage channels
-    address public owner;
-    // Reserved address that can be used only to change owner for emergency
-    address public oracle;
-
-    // Existing channels where key of map is address of account which owns a channel
-    mapping(address => Channel) private channels;
-
-    // Amount of ETH/QTUM or tokens owned by the contract
-    // Zero key [address(0)] is used for ETH/QTUM instead of tokens
-    mapping(address => uint256) private balances;
-
-    ///////////////////////////////////////////////////
     // EVENTS
     ///////////////////////////////////////////////////
 
@@ -120,7 +99,7 @@ contract L2Dex {
 
     /// @dev Deposits ETH/QTUM to a channel by user.
     function() public payable {
-        deposit();
+        deposit(address(0), 0);
     }
 
     /// @dev Changes owner address by oracle.
@@ -133,35 +112,31 @@ contract L2Dex {
     // INTERNAL BALANCES FUNCTIONS
     ///////////////////////////////////////////////////
 
-    /// @dev Deposits ETH/QTUM to the contract balance.
-    function depositInternal() public payable {
-        require(msg.value > 0);
-        balances[address(0)] = balances[address(0)].add(msg.value);
-        emit DepositInternal(address(0), msg.value, balances[address(0)]);
+    /// @dev Deposits ETH/QTUM or tokens to the contract balance.
+    function depositInternal(address token, uint256 amount) public payable {
+        uint256 depositAmount = 0;
+        if (token != address(0)) {
+            require(msg.value == 0 && amount > 0);
+            depositAmount = amount;
+            // Transfer tokens from the sender to the contract and check result
+            // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
+            require(ERC20(token).transferFrom(msg.sender, this, depositAmount));
+        } else {
+            require(msg.value > 0 && amount == 0);
+            depositAmount = msg.value;
+        }
+        balances[token] = balances[token].add(depositAmount);
+        emit DepositInternal(token, depositAmount, balances[token]);
     }
 
-    /// @dev Deposits tokens to the contract balance.
-    function depositInternal(address token, uint256 amount) public {
-        require(token != address(0) && amount > 0);
-        // Transfer tokens from the sender to the contract and check result
-        // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
-        require(ERC20(token).transferFrom(msg.sender, this, amount));
-        balances[token] = balances[token].add(amount);
-        emit DepositInternal(token, amount, balances[token]);
-    }
-
-    /// @dev Withdraws specified amount of ETH/QTUM to the contract owner.
-    function withdrawInternal(uint256 amount) public onlyOwner {
-        require(amount > 0 && amount <= balances[address(0)]);
-        owner.transfer(amount);
-        balances[address(0)] = balances[address(0)].sub(amount);
-        emit WithdrawInternal(address(0), amount, balances[address(0)]);
-    }
-
-    /// @dev Withdraws specified amount of tokens to the contract owner.
+    /// @dev Withdraws specified amount of ETH/QTUM or tokens to the contract owner.
     function withdrawInternal(address token, uint256 amount) public onlyOwner {
-        require(token != address(0) && amount > 0 && amount <= balances[token]);
-        require(ERC20(token).transfer(owner, amount));
+        require(amount > 0 && amount <= balances[token]);
+        if (token != address(0)) {
+            require(ERC20(token).transfer(owner, amount));
+        } else {
+            owner.transfer(amount);
+        }
         balances[token] = balances[token].sub(amount);
         emit WithdrawInternal(token, amount, balances[token]);
     }
@@ -170,27 +145,19 @@ contract L2Dex {
     // CHANNEL BALANCES FUNCTIONS
     ///////////////////////////////////////////////////
 
-    /// @dev Deposits ETH/QTUM to a channel by user.
-    function deposit() public notExpired payable {
-        require(msg.value > 0);
-        Channel storage channel = channels[msg.sender];
-        if (channel.expiration == 0) {
-            channel.expiration = now.add(TTL_DEFAULT);
-            channel.contractOwner = owner;
-            emit ChannelExtend(msg.sender, channel.expiration);
+    /// @dev Deposits ETH/QTUM or tokens to a channel by user.
+    function deposit(address token, uint256 amount) public notExpired payable {
+        uint256 depositAmount = 0;
+        if (token != address(0)) {
+            require(msg.value == 0 && amount > 0);
+            depositAmount = amount;
+            // Transfer tokens from the sender to the contract and check result
+            // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
+            require(ERC20(token).transferFrom(msg.sender, this, depositAmount));
+        } else {
+            require(msg.value > 0 && amount == 0);
+            depositAmount = msg.value;
         }
-        Account storage account = channel.accounts[address(0)];
-        account.balance = account.balance.add(msg.value);
-        emit Deposit(msg.sender, address(0), msg.value, account.balance);
-        emit ChannelUpdate(msg.sender, address(0), account.balance, account.change, account.withdrawable, account.nonce);
-    }
-
-    /// @dev Deposits tokens to a channel by user.
-    function deposit(address token, uint256 amount) public notExpired {
-        require(token != address(0) && amount > 0);
-        // Transfer tokens from the sender to the contract and check result
-        // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
-        require(ERC20(token).transferFrom(msg.sender, this, amount));
         Channel storage channel = channels[msg.sender];
         if (channel.expiration == 0) {
             channel.expiration = now.add(TTL_DEFAULT);
@@ -198,32 +165,13 @@ contract L2Dex {
             emit ChannelExtend(msg.sender, channel.expiration);
         }
         Account storage account = channel.accounts[token];
-        account.balance = account.balance.add(amount);
-        emit Deposit(msg.sender, token, amount, account.balance);
+        account.balance = account.balance.add(depositAmount);
+        emit Deposit(msg.sender, token, depositAmount, account.balance);
         emit ChannelUpdate(msg.sender, token, account.balance, account.change, account.withdrawable, account.nonce);
     }
 
-    /// @dev Withdraws specified amount of ETH/QTUM to user.
-    function withdraw(uint256 amount) public canWithdraw(address(0)) {
-        Channel storage channel = channels[msg.sender];
-        Account storage account = channel.accounts[address(0)];
-        // Check if channel is expired and there is something we should change in channel
-        if (isChannelExpired(channel)) {
-            // Before widthdraw it is necessary to apply current balance change
-            updateBalance(account, address(0));
-            // Before widthdraw it is also necessary to update withdrawable amount
-            updateWithdrawable(account, account.balance);
-        }
-        require(amount > 0 && amount <= account.withdrawable);
-        msg.sender.transfer(amount);
-        account.withdrawable = account.withdrawable.sub(amount);
-        emit Withdraw(msg.sender, address(0), amount, account.balance);
-        emit ChannelUpdate(msg.sender, address(0), account.balance, account.change, account.withdrawable, account.nonce);
-    }
-
-    /// @dev Withdraws specified amount of tokens to user.
+    /// @dev Withdraws specified amount of ETH/QTUM or tokens to user.
     function withdraw(address token, uint256 amount) public canWithdraw(token) {
-        require(token != address(0));
         Channel storage channel = channels[msg.sender];
         Account storage account = channel.accounts[token];
         // Check if channel is expired and there is something we should change in channel
@@ -234,7 +182,11 @@ contract L2Dex {
             updateWithdrawable(account, account.balance);
         }
         require(amount > 0 && amount <= account.withdrawable);
-        require(ERC20(token).transfer(msg.sender, amount));
+        if (token != address(0)) {
+            require(ERC20(token).transfer(msg.sender, amount));
+        } else {
+            msg.sender.transfer(amount);
+        }
         account.withdrawable = account.withdrawable.sub(amount);
         emit Withdraw(msg.sender, token, amount, account.balance);
         emit ChannelUpdate(msg.sender, token, account.balance, account.change, account.withdrawable, account.nonce);
@@ -406,4 +358,25 @@ contract L2Dex {
             return account.balance;
         }
     }
+
+    ///////////////////////////////////////////////////
+    // CONTRACT MEMBERS
+    ///////////////////////////////////////////////////
+
+    // Minimal TTL that can be used to extend existing channel
+    uint256 constant public TTL_MIN = 1 days;
+    // Initial TTL for new channels created just after the first deposit
+    uint256 constant public TTL_DEFAULT = 20 days;
+
+    // Address of account which has all permissions to manage channels
+    address public owner;
+    // Reserved address that can be used only to change owner for emergency
+    address public oracle;
+
+    // Existing channels where key of map is address of account which owns a channel
+    mapping(address => Channel) private channels;
+
+    // Amount of ETH/QTUM or tokens owned by the contract
+    // Zero key [address(0)] is used for ETH/QTUM instead of tokens
+    mapping(address => uint256) private balances;
 }
