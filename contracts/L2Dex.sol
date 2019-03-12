@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.4.25;
 
 import './common/ERC20.sol';
 import './common/SafeMath.sol';
@@ -19,6 +19,8 @@ contract L2Dex {
         int256 change;
         // Amount of either ETH/QTUM or tokens available to withdraw by user
         uint256 withdrawable;
+        // Amount of either ETH/QTUM or tokens additionally available to trade by user (only for market makers)
+        uint256 credited;
         // Index of the last pushed transaction
         uint256 nonce;
     }
@@ -35,9 +37,44 @@ contract L2Dex {
         address contractOwner;
     }
 
+    struct Credit {
+        // Amount of either ETH/QTUM or tokens deposited as credit guaranty
+        uint256 deposit;
+        // Credit ratio used for the credit
+        uint256 ratio;
+        // Credit fee per year for the credit where 10**16 means 1% per year
+        uint256 fee;
+        // Issue credit date (timestamp in seconds)
+        uint256 issuedAt;
+        // Repay credit date (timestamp in seconds)
+        uint256 repaidAt;
+        // Last credit fee charge date (timestamp in seconds)
+        uint256 feeChargedAt;
+    }
+
+    struct MarketMaker {
+        // Maximum allowed credit ratio for the market maker
+        uint256 creditRatio;
+        // Credit fee per year for the market maker where 10**16 means 1% per year
+        uint256 creditFee;
+        // Flag indicating if the market maker is unregistered
+        bool unregistered;
+        // Issued credits by index starting from 1
+        mapping(uint16 => Credit) credits;
+        // Count of issued credits
+        uint16 creditCount;
+    }
+
     ///////////////////////////////////////////////////
     // EVENTS
     ///////////////////////////////////////////////////
+
+    event MarketMakerRegistered(address indexed who, uint256 indexed creditRatio, uint256 indexed creditFee);
+    event MarketMakerUnregistered(address indexed who);
+
+    event CreditIssued(address indexed debtor, address indexed token, uint16 creditId, uint256 deposit, uint256 credit);
+    event CreditRepaid(address indexed debtor, address indexed token, uint16 creditId);
+    event CreditFeeCharged(address indexed debtor, address indexed token, uint16 creditId, uint256 amount);
 
     event DepositInternal(address indexed token, uint256 amount, uint256 balance);
     event WithdrawInternal(address indexed token, uint256 amount, uint256 balance);
@@ -54,37 +91,6 @@ contract L2Dex {
         uint256 withdrawable,
         uint256 nonce
     );
-
-    ///////////////////////////////////////////////////
-    // MODIFIERS
-    ///////////////////////////////////////////////////
-
-    /// @dev Throws if called by any account other than the owner.
-    modifier onlyOwner() {
-        require(msg.sender == owner);
-        _;
-    }
-
-    /// @dev Throws if called by any account other than the oracle.
-    modifier onlyOracle() {
-        require(msg.sender == oracle);
-        _;
-    }
-
-    /// @dev Throws if channel exists and expired.
-    modifier notExpired() {
-        require(!isChannelExpired(channels[msg.sender]));
-        _;
-    }
-
-    /// @dev Throws if channel cannot be withdrawn.
-    modifier canWithdraw(address token) {
-        // There should be something that can be withdrawn on the channel
-        require(getBalanceTotal(msg.sender, token) > 0);
-        // The channel should be either prepared for withdraw by owner or expired
-        require(getBalanceWithdrawable(msg.sender, token) > 0 || isChannelExpired(channels[msg.sender]));
-        _;
-    }
 
     ///////////////////////////////////////////////////
     // CONTRACT FUNCTIONS
@@ -106,6 +112,103 @@ contract L2Dex {
     function changeOwner(address _owner) public onlyOracle {
         require(_owner != address(0));
         owner = _owner;
+    }
+
+    ///////////////////////////////////////////////////
+    // MARKET MAKERS FUNCTIONS
+    ///////////////////////////////////////////////////
+
+    /// @dev Registers market maker.
+    function registerMarketMaker(address who, uint256 creditRatio, uint256 creditFee) public onlyOwner {
+        require(creditRatio > CREDIT_RATIO_DENOMINATOR);
+        require(marketMakers[who].creditRatio == 0);
+        marketMakers[who] = MarketMaker(creditRatio, creditFee, false, 0);
+        emit MarketMakerRegistered(who, creditRatio, creditFee);
+    }
+
+    /// @dev Unregisters market maker.
+    function unregisterMarketMaker(address who) public onlyOwner {
+        require(marketMakers[who].creditRatio > 0);
+        marketMakers[who].unregistered = true;
+        emit MarketMakerUnregistered(who);
+    }
+
+    ///////////////////////////////////////////////////
+    // CREDITS FUNCTIONS
+    ///////////////////////////////////////////////////
+
+    /// @dev Deposits ETH/QTUM or tokens to a channel by market maker and take a credit.
+    function takeCredit(address token, uint256 amount) public notExpired payable {
+        MarketMaker storage marketMaker = marketMakers[msg.sender];
+        require(marketMaker.creditRatio > 0 && !marketMaker.unregistered);
+        uint256 creditRatio = CREDIT_RATIO_DEFAULT; // TODO: Take from function arguments?
+        //require(creditRatio > CREDIT_RATIO_DENOMINATOR && creditRatio <= marketMaker.creditRatio);
+        uint256 depositAmount = 0;
+        if (token != address(0)) {
+            require(msg.value == 0 && amount > 0);
+            depositAmount = amount;
+            // Transfer tokens from the sender to the contract and check result
+            // Note: At least specified amount of tokens should be allowed to spend by the contract before deposit!
+            require(ERC20(token).transferFrom(msg.sender, this, depositAmount));
+        } else {
+            require(msg.value > 0 && amount == 0);
+            depositAmount = msg.value;
+        }
+        uint256 creditAmount = depositAmount.mul(creditRatio).div(CREDIT_RATIO_DENOMINATOR).sub(depositAmount);
+        Channel storage channel = channels[msg.sender];
+        if (channel.expiration == 0) {
+            channel.expiration = now.add(TTL_DEFAULT);
+            channel.contractOwner = owner;
+            emit ChannelExtend(msg.sender, channel.expiration);
+        }
+        Account storage account = channel.accounts[token];
+        account.balance = account.balance.add(depositAmount).add(creditAmount);
+        account.credited = account.credited.add(creditAmount);
+        uint16 creditId = marketMaker.creditCount + 1;
+        marketMaker.credits[creditId] = Credit(depositAmount, creditRatio, marketMaker.creditFee, now, 0, 0);
+        marketMaker.creditCount = marketMaker.creditCount + 1;
+        emit CreditIssued(msg.sender, token, creditId, depositAmount, creditAmount);
+        emit Deposit(msg.sender, token, depositAmount.add(creditAmount), account.balance);
+        emit ChannelUpdate(msg.sender, token, account.balance, account.change, account.withdrawable, account.nonce);
+    }
+
+    /// @dev Withdraws ETH/QTUM or tokens from a market maker channel and repay the credit.
+    function repayCredit(address token, uint16 creditId) public notExpired {
+        MarketMaker storage marketMaker = marketMakers[msg.sender];
+        require(marketMaker.creditRatio > 0 && !marketMaker.unregistered);
+        require(creditId >= 1 && creditId <= marketMaker.creditCount);
+        Credit storage credit = marketMaker.credits[creditId];
+        require(credit.issuedAt > 0 && credit.repaidAt == 0);
+        uint256 creditAmount = credit.deposit.mul(credit.ratio).div(CREDIT_RATIO_DENOMINATOR).sub(credit.deposit);
+        uint256 feeDuration = now.sub(credit.issuedAt);
+        uint256 feeAmount = feeDuration.mul(creditAmount).div(SECONDS_IN_YEAR);
+        Channel storage channel = channels[msg.sender];
+        Account storage account = channel.accounts[token];
+        account.balance = account.balance.sub(credit.deposit).sub(creditAmount).sub(feeAmount);
+        account.credited = account.credited.sub(creditAmount);
+        credit.repaidAt = now;
+        credit.feeChargedAt = now;
+        emit CreditFeeCharged(msg.sender, token, creditId, feeAmount);
+        emit CreditRepaid(msg.sender, token, creditId);
+        emit Withdraw(msg.sender, token, credit.deposit.add(creditAmount), account.balance);
+        emit ChannelUpdate(msg.sender, token, account.balance, account.change, account.withdrawable, account.nonce);
+    }
+
+    /// @dev Withdraws ETH/QTUM or tokens from a market maker channel to pay the credit fee.
+    function chargeCreditFee(address debtor, address token, uint16 creditId) public onlyOwner {
+        MarketMaker storage marketMaker = marketMakers[debtor];
+        require(marketMaker.creditRatio > 0 && !marketMaker.unregistered);
+        require(creditId >= 1 && creditId <= marketMaker.creditCount);
+        Credit storage credit = marketMaker.credits[creditId];
+        require(credit.issuedAt > 0 && credit.repaidAt == 0);
+        uint256 creditAmount = credit.deposit.mul(credit.ratio).div(CREDIT_RATIO_DENOMINATOR).sub(credit.deposit);
+        uint256 feeDuration = now.sub(credit.issuedAt);
+        uint256 feeAmount = feeDuration.mul(creditAmount).div(SECONDS_IN_YEAR);
+        Account storage account = channels[debtor].accounts[token];
+        account.balance = account.balance.sub(feeAmount);
+        credit.feeChargedAt = now;
+        emit CreditFeeCharged(debtor, token, creditId, feeAmount);
+        emit ChannelUpdate(debtor, token, account.balance, account.change, account.withdrawable, account.nonce);
     }
 
     ///////////////////////////////////////////////////
@@ -305,6 +408,11 @@ contract L2Dex {
         return calcBalanceApplied(account).add(account.withdrawable);
     }
 
+    /// @dev Returns channel balance credited (only for market makers).
+    function getBalanceCredited(address channelOwner, address token) public view returns (uint256) {
+        return channels[channelOwner].accounts[token].credited;
+    }
+
     /// @dev Returns index of last pushed channel update transaction.
     function getNonce(address channelOwner, address token) public view returns (uint256) {
         return channels[channelOwner].accounts[token].nonce;
@@ -360,18 +468,55 @@ contract L2Dex {
     }
 
     ///////////////////////////////////////////////////
-    // CONTRACT MEMBERS
+    // MODIFIERS
     ///////////////////////////////////////////////////
 
-    // Minimal TTL that can be used to extend existing channel
-    uint256 constant public TTL_MIN = 1 days;
-    // Initial TTL for new channels created just after the first deposit
-    uint256 constant public TTL_DEFAULT = 20 days;
+    /// @dev Throws if called by any account other than the owner.
+    modifier onlyOwner() {
+        require(msg.sender == owner);
+        _;
+    }
+
+    /// @dev Throws if called by any account other than the oracle.
+    modifier onlyOracle() {
+        require(msg.sender == oracle);
+        _;
+    }
+
+    /// @dev Throws if called by any account other than one of registered market makers.
+    modifier onlyMarketMaker() {
+        require(marketMakers[msg.sender].creditRatio > 0 && !marketMakers[msg.sender].unregistered);
+        _;
+    }
+
+    /// @dev Throws if channel exists and expired.
+    modifier notExpired() {
+        require(!isChannelExpired(channels[msg.sender]));
+        _;
+    }
+
+    /// @dev Throws if channel cannot be withdrawn.
+    modifier canWithdraw(address token) {
+        // There should be something that can be withdrawn on the channel
+        require(getBalanceTotal(msg.sender, token) > 0);
+        // The channel should be either prepared for withdraw by owner or expired
+        require(getBalanceWithdrawable(msg.sender, token) > 0 || isChannelExpired(channels[msg.sender]));
+        _;
+    }
+
+    ///////////////////////////////////////////////////
+    // CONTRACT MEMBERS
+    ///////////////////////////////////////////////////
 
     // Address of account which has all permissions to manage channels
     address public owner;
     // Reserved address that can be used only to change owner for emergency
     address public oracle;
+
+    // Addresses of registered market makers
+    mapping(uint64 => address) public marketMakerAddresses;
+    // Count of registered market makers
+    uint64 public marketMakerCount;
 
     // Existing channels where key of map is address of account which owns a channel
     mapping(address => Channel) private channels;
@@ -379,4 +524,19 @@ contract L2Dex {
     // Amount of ETH/QTUM or tokens owned by the contract
     // Zero key [address(0)] is used for ETH/QTUM instead of tokens
     mapping(address => uint256) private balances;
+
+    // Registered market makers
+    mapping(address => MarketMaker) private marketMakers;
+
+    // Minimal TTL that can be used to extend existing channel
+    uint256 constant public TTL_MIN = 1 days;
+    // Initial TTL for new channels created just after the first deposit
+    uint256 constant public TTL_DEFAULT = 20 days;
+    // Default credit ratio for market makers (10^18 equals to ratio 1)
+    uint256 constant public CREDIT_RATIO_DEFAULT = 10 * CREDIT_RATIO_DENOMINATOR;
+
+    // Denominator of credit ratio for market makers
+    uint256 constant private CREDIT_RATIO_DENOMINATOR = 10**18;
+    // Amount of seconds in a year
+    uint256 constant private SECONDS_IN_YEAR = 31536000;
 }

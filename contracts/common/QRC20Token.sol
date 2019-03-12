@@ -1,4 +1,4 @@
-pragma solidity ^0.4.24;
+pragma solidity ^0.4.25;
 
 import './QRC20.sol';
 import './SafeMath.sol';
@@ -54,6 +54,21 @@ contract QRC20Token is QRC20 {
         allowance[msg.sender][_spender] = _value;
         emit Approval(msg.sender, _spender, _value);
         return true;
+    }
+
+    function mint(address _receiver, uint256 _value) internal {
+        require(_receiver != address(0));
+        require(_value > 0);
+        balanceOf[_receiver] = balanceOf[_receiver].add(_value);
+        totalSupply = totalSupply.add(_value);
+        emit Transfer(address(0), _receiver, _value);
+    }
+
+    function burn(uint256 _value) internal {
+        require(_value > 0 && _value <= balanceOf[msg.sender]);
+        balanceOf[msg.sender] = balanceOf[msg.sender].sub(_value);
+        totalSupply = totalSupply.sub(_value);
+        emit Transfer(msg.sender, address(0), _value);
     }
 
     function totalSupply() public view returns (uint256) {
